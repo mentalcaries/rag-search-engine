@@ -4,6 +4,8 @@ CACHE_DIR = "cache"
 BM25_K1 = 1.5
 BM25_B = 0.75
 MOVIE_EMBEDDINGS_PATH = "cache/movie_embeddings.npy"
+CHUNK_EMBEDDINGS_PATH = "cache/chunk_embeddings.npy"
+CHUNK_METADATA_PATH = "cache/chunk_metadata.json"
 
 def load_movies():
     with open("data/movies.json", "r") as file:
