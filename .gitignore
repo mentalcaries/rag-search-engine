@@ -9,4 +9,4 @@ venv/
 # Virtual environments
 .venv
 /data/
-cache/
+cache
