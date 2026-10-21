@@ -226,7 +226,14 @@ def chunk_command(text: str, chunk_size=200, overlap=0):
 
 
 def semantic_chunk(text: str, max_chunk_size=4, overlap=0):
+    text = text.strip()
+    if text == "":
+        return []
     sentences = re.split(r"(?<=[.!?])\s+", text)
+
+    if len(sentences) == 1 and not text.endswith((".", "!", "?")):
+        return [text]
+
     chunks = []
     step = max_chunk_size - overlap
     i = 0
@@ -235,7 +242,15 @@ def semantic_chunk(text: str, max_chunk_size=4, overlap=0):
         chunk_sentences = sentences[i : i + max_chunk_size]
         if chunks and len(chunk_sentences) <= overlap:
             break
-        chunks.append(" ".join(sentences[i : i + max_chunk_size]))
+
+        chunk_sentences = [sentence.strip() for sentence in chunk_sentences]
+        chunk_sentences = [sentence for sentence in chunk_sentences if sentence]
+
+        chunk = " ".join(chunk_sentences)
+
+        if chunk:
+            chunks.append(chunk)
+
         i += step
 
     return chunks
