@@ -1,8 +1,12 @@
 import os
+from dotenv import load_dotenv
+from openai import OpenAI
 
 from lib.inverted_index import InvertedIndex
 from semantic_search import ChunkedSemanticSearch
 from lib.utils import load_movies
+from lib.query_enhancement import enhance_query, rank_query, batch_rank_query
+import json
 
 
 class HybridSearch:
@@ -68,11 +72,48 @@ class HybridSearch:
         return sorted_scores
 
     def rrf_search(self, query: str, k: int, limit: int = 10) -> list[dict]:
-        raise NotImplementedError("RRF hybrid search is not implemented yet.")
+        bm25_results = self._bm25_search(query, limit * 500)
+        semantic_search_results = self.semantic_search.search_chunks(query, limit * 500)
+
+        scores = {}
+        for index, (doc_id, score) in enumerate(bm25_results, start=1):
+            if doc_id not in scores:
+                scores[doc_id] = {
+                    "title": self.idx.docmap[doc_id]["title"],
+                    "document": self.idx.docmap[doc_id],
+                    "bm25_rank": index,
+                    "semantic_rank": None,
+                    "rrf_score": rrf_score(index),
+                }
+        for index, result in enumerate(semantic_search_results, start=1):
+            if result["id"] in scores:
+                scores[result["id"]]["semantic_rank"] = index
+                scores[result["id"]]["rrf_score"] += rrf_score(index)
+            else:
+                scores[result["id"]] = {
+                    "title": self.idx.docmap[doc_id]["title"],
+                    "document": self.idx.docmap[doc_id],
+                    "semantic_rank": index,
+                    "rrf_score": rrf_score(index),
+                    "bm25_rank": None,
+                }
+
+        sorted_scores = dict(
+            sorted(
+                scores.items(),
+                key=lambda item: item[1]["rrf_score"],
+                reverse=True,
+            )[:limit]
+        )
+        return sorted_scores
 
 
 def hybrid_score(bm25_score: float, semantic_score: float, alpha: float = 0.5) -> float:
     return alpha * bm25_score + (1 - alpha) * semantic_score
+
+
+def rrf_score(rank: int, k: int = 60) -> float:
+    return 1 / (k + rank)
 
 
 def normalize_scores(scores):
@@ -94,3 +135,48 @@ def weighted_search_command(query, alpha=0.5, limit=5):
     movies = load_movies()
     hybrid_search = HybridSearch(movies)
     return hybrid_search.weighted_search(query, alpha, limit)
+
+
+def rrf_search_command(query, k=60, limit=25, enhance=None, rerank_method=None):
+    movies = load_movies()
+    hybrid_search = HybridSearch(movies)
+    original_query = query
+    enhanced_query = None
+    if enhance:
+        enhanced_query = enhance_query(query, method=enhance)
+        query = enhanced_query
+    query_limit = limit
+    if rerank_method:
+        query_limit = limit * 5
+
+    results = hybrid_search.rrf_search(query, k, query_limit)
+    if rerank_method == "individual":
+        for result in results.values():
+            rank = rank_query(query, result)
+            result["rank"] = rank
+
+        sorted_results = sorted(
+            results.values(),
+            key=lambda item: item["rank"],
+            reverse=True,
+        )
+        results = sorted_results
+    
+    if rerank_method == "batch":
+        llm_ranked_ids = batch_rank_query(query, json.dumps(results))
+        llm_sorted_results = []
+        for rank,doc_id in enumerate(llm_ranked_ids, start=1):
+            result = results[doc_id]
+            result["rank"] = rank
+            llm_sorted_results.append(result)
+        results = llm_sorted_results
+
+
+    return {
+        "original_query": original_query,
+        "enhanced_query": enhanced_query,
+        "enhance_method": enhance,
+        "query": query,
+        "k": k,
+        "results": results,
+    }

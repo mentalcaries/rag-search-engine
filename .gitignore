@@ -10,3 +10,4 @@ venv/
 .venv
 /data/
 cache
+.env
