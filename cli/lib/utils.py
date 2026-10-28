@@ -11,3 +11,8 @@ def load_movies():
     with open("data/movies.json", "r") as file:
         data = json.load(file)
     return data["movies"]
+
+def load_dataset():
+    with open("data/golden_dataset.json", "r") as file:
+        data = json.load(file)
+    return data["test_cases"]

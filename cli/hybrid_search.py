@@ -7,6 +7,7 @@ from semantic_search import ChunkedSemanticSearch
 from lib.utils import load_movies
 from lib.query_enhancement import enhance_query, rank_query, batch_rank_query
 import json
+from sentence_transformers import CrossEncoder
 
 
 class HybridSearch:
@@ -150,6 +151,8 @@ def rrf_search_command(query, k=60, limit=25, enhance=None, rerank_method=None):
         query_limit = limit * 5
 
     results = hybrid_search.rrf_search(query, k, query_limit)
+    cross_encoder = CrossEncoder("cross-encoder/ms-marco-TinyBERT-L2-v2")
+
     if rerank_method == "individual":
         for result in results.values():
             rank = rank_query(query, result)
@@ -161,16 +164,30 @@ def rrf_search_command(query, k=60, limit=25, enhance=None, rerank_method=None):
             reverse=True,
         )
         results = sorted_results
-    
+
     if rerank_method == "batch":
         llm_ranked_ids = batch_rank_query(query, json.dumps(results))
         llm_sorted_results = []
-        for rank,doc_id in enumerate(llm_ranked_ids, start=1):
+        for rank, doc_id in enumerate(llm_ranked_ids, start=1):
             result = results[doc_id]
             result["rank"] = rank
             llm_sorted_results.append(result)
         results = llm_sorted_results
 
+    if rerank_method == "cross_encoder":
+        pairs = []
+        for doc in results.values():
+            pairs.append([query, f"{doc.get('title', '')} - {doc.get('document', '')}"])
+        scores = cross_encoder.predict(pairs)
+        for doc, score in zip(results.values(), scores):
+            doc["cross_encoder_score"] = score
+
+        sorted_results = sorted(
+            results.values(),
+            key=lambda item: item["cross_encoder_score"],
+            reverse=True,
+        )
+        results = sorted_results
 
     return {
         "original_query": original_query,
@@ -178,5 +195,5 @@ def rrf_search_command(query, k=60, limit=25, enhance=None, rerank_method=None):
         "enhance_method": enhance,
         "query": query,
         "k": k,
-        "results": results,
+        "results": results[:limit],
     }
