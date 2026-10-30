@@ -1,6 +1,5 @@
 import argparse
-from lib.utils import load_dataset, load_movies
-from hybrid_search import HybridSearch
+from lib.evaluation import evaluate_command
 
 
 def main() -> None:
@@ -13,24 +12,13 @@ def main() -> None:
     )
 
     args = parser.parse_args()
-    limit = args.limit
-
-    test_cases = load_dataset()
-    movies = load_movies()
-    search = HybridSearch(movies)
-
-    print("k=\n", limit)
-    for test_case in test_cases:
-        results = search.rrf_search(test_case["query"], 60, limit)
-        retrieved_titles = [r["title"] for r in results.values()]
-
-        overlap = list(set(retrieved_titles) & set(test_case["relevant_docs"]))
-        precision = len(overlap) / len(retrieved_titles)
-
-        print(f"- Query: {test_case['query']}")
-        print(f"    - Precision@{limit}: {precision:.4f}")
-        print(f"    - Retrieved: {retrieved_titles}")
-        print(f"    - Relevant: {test_case['relevant_docs']}")
+    for query, result in evaluate_command(args.limit).items():
+        print(f"- Query: {query}")
+        print(f"    - Precision@{args.limit}: {result['precision']:.4f}")
+        print(f"    - Recall@{args.limit}: {result['recall']:.4f}")
+        print(f"    - F1 Score: {result['f1_score']:.4f}")
+        print(f"    - Retrieved: {result['retrieved']}")
+        print(f"    - Relevant: {result['relevant']}")
 
 
 if __name__ == "__main__":
