@@ -13,6 +13,7 @@ from lib.query_enhancement import (
 from lib.utils import load_movies
 from semantic_search import ChunkedSemanticSearch
 
+from lib.utils import RRF_K
 
 SEARCH_CANDIDATE_MULTIPLIER = 500
 RERANK_CANDIDATE_MULTIPLIER = 5
@@ -42,7 +43,7 @@ class HybridSearch:
             bm25_results, semantic_results, self.idx.docmap, alpha
         )[:limit]
 
-    def rrf_search(self, query: str, k: int, limit: int = 10) -> list[dict]:
+    def rrf_search(self, query: str, k: int = RRF_K, limit: int = 10) -> list[dict]:
         bm25_results = self._bm25_search(query, limit * SEARCH_CANDIDATE_MULTIPLIER)
         semantic_results = self.semantic_search.search_chunks(
             query, limit * SEARCH_CANDIDATE_MULTIPLIER
